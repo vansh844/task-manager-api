@@ -2,6 +2,21 @@ const express=require('express')
 const router= new express.Router()
 const Task=require('../models/task')
 const auth=require('../middleware/auth')
+const multer=require('multer')
+const sharp=require('sharp')
+const { findById, findOne } = require('../models/task')
+
+const upload=multer({
+    limits:{
+        fileSize:1000000
+    },
+    fileFilter(req,file,cb){
+        if(!file.originalname.match(/\.(jpg|jpeg|png)$/)){
+            cb(new Error('Please upload an image'))
+        }
+        cb(undefined,true)
+    }
+})
 
 router.post('/tasks',auth, async(req,res)=>{
     //const task=new Task(req.body)
@@ -66,8 +81,21 @@ router.get('/tasks/:id',auth,async(req,res)=>{
     }
 })
 
+router.post('/tasks/:id/image',auth,upload.single('image'),async(req,res)=>{
+    const buffer=await sharp(req.file.buffer).resize({width:250,height:250}).png().toBuffer()
+    const task=await Task.findOne({_id:req.params.id, owner:req.user._id})
+    if(!task){
+        res.status(404).send()
+    }
+    task.images=task.images.concat(buffer)
+    task.save()
+    res.send()
+},(error,req,res,next)=>{
+    res.status(400).send({error:error.message})
+})
+
 router.patch('/tasks/:id',auth, async(req, res)=>{
-    const allowedUpdates=['description', 'completed']
+    const allowedUpdates=['description', 'completed','images']
     const updates=Object.keys(req.body)
     const isValidOperation=updates.every((update)=>allowedUpdates.includes(update))
 
